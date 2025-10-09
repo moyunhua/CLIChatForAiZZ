@@ -1,0 +1,1 @@
+Place files here via the app's uploader; this placeholder ensures the folder stays in version control.
