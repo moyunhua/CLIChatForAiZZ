@@ -44,12 +44,22 @@ def _download_file(url: str, dest: Path, retries: int = 2, timeout: int = 30) ->
     for attempt in range(retries + 1):
         try:
             logger.info(f"Downloading from {url} (attempt {attempt+1}/{retries+1}) -> {dest}")
-            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            # Create temp file in the same directory as dest to avoid cross-device rename issues
+            with tempfile.NamedTemporaryFile(dir=str(dest.parent), delete=False) as tmp:
                 tmp_path = Path(tmp.name)
             with urllib.request.urlopen(url, timeout=timeout) as resp, open(tmp_path, "wb") as out:
                 shutil.copyfileobj(resp, out)
             # Move atomically into place
-            tmp_path.replace(dest)
+            try:
+                tmp_path.replace(dest)
+            except OSError as oe:
+                logger.warning(f"Atomic replace failed ({oe}); falling back to copy -> overwrite")
+                # Fallback: copy over and then remove temp
+                shutil.copyfile(tmp_path, dest)
+                try:
+                    tmp_path.unlink(missing_ok=True)  # type: ignore[attr-defined]
+                except Exception:
+                    pass
             # Make executable (best-effort)
             try:
                 dest.chmod(0o755)
